@@ -14,7 +14,6 @@ import {
 import {
   GOOGLE_SHEETS_REFRESH_EVENT,
   loadSpecialDaysFromGoogleSheets,
-  saveAllToGoogleSheets,
 } from "../services/googleSheetsApi";
 
 import type { GoogleSheetsData } from "../services/googleSheetsApi";
@@ -72,8 +71,6 @@ export function useSpecialDays() {
 
   useEffect(() => {
     async function loadFromGoogle() {
-      const localDays = loadSpecialDays();
-
       try {
         const googleDays =
           await loadSpecialDaysFromGoogleSheets();
@@ -86,29 +83,22 @@ export function useSpecialDays() {
             type: day.type as SpecialDayType,
           }));
 
-        if (normalizedGoogleDays.length > 0) {
-          setSpecialDays(
-            sortSpecialDays(normalizedGoogleDays)
-          );
-
-          saveSpecialDays(normalizedGoogleDays);
-        } else if (localDays.length > 0) {
-          setSpecialDays(sortSpecialDays(localDays));
-
-          await saveAllToGoogleSheets({
-            specialDays: localDays,
-          });
-        } else {
-          setSpecialDays([]);
-          saveSpecialDays([]);
-        }
+        // Google Sheets is the source of truth when it is available.
+        // An empty Google list means that there are no special days.
+        setSpecialDays(
+          sortSpecialDays(normalizedGoogleDays)
+        );
+        saveSpecialDays(normalizedGoogleDays);
       } catch (error) {
+        // Use local data only when Google Sheets is unavailable.
         console.error(
           "Ошибка загрузки SpecialDays:",
           error
         );
 
-        setSpecialDays(sortSpecialDays(localDays));
+        setSpecialDays(
+          sortSpecialDays(loadSpecialDays())
+        );
       } finally {
         setGoogleLoaded(true);
       }
@@ -123,29 +113,7 @@ export function useSpecialDays() {
     }
 
     saveSpecialDays(specialDays);
-
-    void saveAllToGoogleSheets({
-      specialDays,
-    }).catch((error) => {
-      console.error(
-        "Ошибка сохранения SpecialDays:",
-        error
-      );
-    });
   }, [specialDays, googleLoaded]);
-
-  async function saveToGoogle(days: SpecialDay[]) {
-    try {
-      await saveAllToGoogleSheets({
-        specialDays: days,
-      });
-    } catch (error) {
-      console.error(
-        "Ошибка сохранения SpecialDays:",
-        error
-      );
-    }
-  }
 
   function addSpecialDay(
     data: SpecialDayFormData
@@ -155,26 +123,20 @@ export function useSpecialDays() {
       ...data,
     };
 
-    setSpecialDays((prev) => {
-      const next = sortSpecialDays([
+    setSpecialDays((prev) =>
+      sortSpecialDays([
         ...prev,
         item,
-      ]);
-
-      if (googleLoaded) {
-        void saveToGoogle(next);
-      }
-
-      return next;
-    });
+      ])
+    );
   }
 
   function updateSpecialDay(
     id: string,
     data: SpecialDayFormData
   ) {
-    setSpecialDays((prev) => {
-      const next = sortSpecialDays(
+    setSpecialDays((prev) =>
+      sortSpecialDays(
         prev.map((item) =>
           item.id === id
             ? {
@@ -183,30 +145,16 @@ export function useSpecialDays() {
               }
             : item
         )
-      );
-
-      if (googleLoaded) {
-        void saveToGoogle(next);
-      }
-
-      return next;
-    });
+      )
+    );
   }
 
   function deleteSpecialDay(id: string) {
-    setSpecialDays((prev) => {
-      const next = prev.filter(
+    setSpecialDays((prev) =>
+      prev.filter(
         (item) => item.id !== id
-      );
-
-      saveSpecialDays(next);
-
-      if (googleLoaded) {
-        void saveToGoogle(next);
-      }
-
-      return next;
-    });
+      )
+    );
   }
 
   const specialDateMap = useMemo(() => {
