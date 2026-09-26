@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
+
 import {
   Box,
   Button,
@@ -7,98 +8,147 @@ import {
   Typography,
 } from "@mui/material";
 
-import SummaryCard from "../../components/SummaryCard";
+import ConfirmDialog from "../../components/ConfirmDialog";
+import EntryDialog from "../../components/EntryDialog";
 import EntryTable from "../../components/EntryTable";
+import SummaryCard from "../../components/SummaryCard";
 
-import type { WorklogEntry } from "../../models/WorklogEntry";
-
-const initialEntries: WorklogEntry[] = [
-  {
-    id: "1",
-    description: "Разработка CFB",
-    hours: 2.5,
-    date: "2026-09-09",
-    writtenOff: false,
-  },
-  {
-    id: "2",
-    description: "Исправление бага",
-    hours: 3,
-    date: "2026-09-09",
-    writtenOff: true,
-  },
-];
+import { useWorklog } from "../../hooks/useWorklog";
+import type {
+  EntryFormData,
+  WorklogEntry,
+} from "../../models/WorklogEntry";
 
 export default function TodayPage() {
-  const [entries, setEntries] = useState(initialEntries);
+  const {
+    entries,
+    totalHours,
+    writtenOffHours,
+    addEntry,
+    updateEntry,
+    deleteEntry,
+    toggleWrittenOff,
+  } = useWorklog();
 
-  const totalHours = useMemo(
-    () => entries.reduce((sum, x) => sum + x.hours, 0),
-    [entries]
-  );
+  const [dialogOpen, setDialogOpen] =
+    useState(false);
 
-  const writtenOffHours = useMemo(
-    () =>
-      entries
-        .filter((x) => x.writtenOff)
-        .reduce((sum, x) => sum + x.hours, 0),
-    [entries]
-  );
+  const [deleteOpen, setDeleteOpen] =
+    useState(false);
 
-  function toggleWrittenOff(id: string) {
-    setEntries((prev) =>
-      prev.map((entry) =>
-        entry.id === id
-          ? {
-              ...entry,
-              writtenOff: !entry.writtenOff,
-            }
-          : entry
-      )
-    );
+  const [selectedEntry, setSelectedEntry] =
+    useState<WorklogEntry>();
+
+  function openCreateDialog() {
+    setSelectedEntry(undefined);
+    setDialogOpen(true);
+  }
+
+  function openEditDialog(
+    entry: WorklogEntry
+  ) {
+    setSelectedEntry(entry);
+    setDialogOpen(true);
+  }
+
+  function openDeleteDialog(
+    entry: WorklogEntry
+  ) {
+    setSelectedEntry(entry);
+    setDeleteOpen(true);
+  }
+
+  function handleSave(data: EntryFormData) {
+    if (selectedEntry) {
+      updateEntry(selectedEntry.id, data);
+    } else {
+      addEntry(data);
+    }
+
+    setDialogOpen(false);
+  }
+
+  function handleDelete() {
+    if (!selectedEntry) return;
+
+    deleteEntry(selectedEntry.id);
+
+    setDeleteOpen(false);
   }
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Stack spacing={3}>
-        <Box>
-          <Typography variant="h4" fontWeight={700}>
-            Сегодня
+    <>
+      <Container
+        maxWidth="md"
+        sx={{ py: 4 }}
+      >
+        <Stack spacing={3}>
+          <Box>
+            <Typography
+              variant="h4"
+              fontWeight={700}
+            >
+              Сегодня
+            </Typography>
+
+            <Typography color="text.secondary">
+              Worklog
+            </Typography>
+          </Box>
+
+          <SummaryCard
+            title="Всего часов"
+            value={totalHours}
+            total={8}
+          />
+
+          <SummaryCard
+            title="Списано"
+            value={writtenOffHours}
+            total={totalHours}
+          />
+
+          <Typography variant="h6">
+            Записи
           </Typography>
 
-          <Typography color="text.secondary">
-            Worklog
-          </Typography>
-        </Box>
+          <EntryTable
+            entries={entries}
+            onToggleWrittenOff={
+              toggleWrittenOff
+            }
+            onEdit={openEditDialog}
+            onDelete={openDeleteDialog}
+          />
 
-        <SummaryCard
-          title="Всего часов"
-          value={totalHours}
-          total={8}
-        />
+          <Button
+            variant="contained"
+            size="large"
+            onClick={openCreateDialog}
+          >
+            Добавить запись
+          </Button>
+        </Stack>
+      </Container>
 
-        <SummaryCard
-          title="Списано"
-          value={writtenOffHours}
-          total={totalHours}
-        />
+      <EntryDialog
+        open={dialogOpen}
+        entry={selectedEntry}
+        onClose={() =>
+          setDialogOpen(false)
+        }
+        onSave={handleSave}
+      />
 
-        <Typography variant="h6">
-          Записи
-        </Typography>
-
-        <EntryTable
-          entries={entries}
-          onToggleWrittenOff={toggleWrittenOff}
-        />
-
-        <Button
-          variant="contained"
-          size="large"
-        >
-          Добавить запись
-        </Button>
-      </Stack>
-    </Container>
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Удалить запись?"
+        message={`Удалить "${selectedEntry?.description ?? ""}"?`}
+        onCancel={() =>
+          setDeleteOpen(false)
+        }
+        onConfirm={handleDelete}
+      />
+    </>
   );
 }
